@@ -33,6 +33,19 @@
     background: #444;
     color: white;
   }
+  #popup {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px 30px;
+    background: rgba(200,0,0,0.9);
+    color: white;
+    font-size: 2em;
+    font-weight: bold;
+    border-radius: 8px;
+    display: none;
+  }
 </style>
 </head>
 <body>
@@ -42,6 +55,7 @@
   <button id="nextPint">Next Pint</button>
   <button id="pauseBtn">Pause</button>
 </div>
+<div id="popup">YOU SUCK</div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
@@ -51,12 +65,17 @@ let phase = 'ready';
 let tilt = 45;
 let fill = 0;
 let score = 0;
+let totalScore = 0;
 let paused = false;
 let pouring = false;
 let settleTimer = 0;
 let targetSettle = 2000;
 let lastTime = 0;
-let bubbleOffset = 0; // for cascade effect
+let bubbleOffset = 0;
+let confetti = [];
+let confettiTimer = 0;
+let popupTimer = 0;
+const popupDiv = document.getElementById('popup');
 
 // Touch controls
 let lastY = null;
@@ -89,6 +108,7 @@ document.getElementById('nextPint').addEventListener('click', () => {
   phase = 'pour1';
   fill = 0;
   tilt = 45;
+  score = 0;
 });
 
 document.getElementById('pauseBtn').addEventListener('click', () => {
@@ -96,9 +116,60 @@ document.getElementById('pauseBtn').addEventListener('click', () => {
 });
 
 function checkScore() {
-  if (fill >= 0.98 && fill <= 1.0) score += 100;
-  else if (fill >= 0.95) score += 75;
-  else if (fill >= 0.90) score += 50;
+  if (fill >= 0.98 && fill <= 1.0) score = 100;
+  else if (fill >= 0.95) score = 75;
+  else if (fill >= 0.90) score = 50;
+  else score = 25;
+
+  totalScore += score;
+
+  if (score >= 75) {
+    startConfetti();
+  } else if (score < 50) {
+    showPopup();
+  }
+}
+
+function showPopup() {
+  popupDiv.style.display = 'block';
+  popupTimer = 3000; // ms
+}
+
+function startConfetti() {
+  confetti = [];
+  for (let i=0; i<150; i++) {
+    confetti.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*-canvas.height,
+      r: Math.random()*6+4,
+      dx: Math.random()*2-1,
+      dy: Math.random()*3+2,
+      color: `hsl(${Math.random()*360}, 100%, 50%)`
+    });
+  }
+  confettiTimer = 3000; // ms
+}
+
+function updateConfetti(dt) {
+  if (confettiTimer > 0) {
+    confettiTimer -= dt;
+    confetti.forEach(c => {
+      c.x += c.dx;
+      c.y += c.dy;
+      if (c.y > canvas.height) c.y = -10;
+    });
+  }
+}
+
+function drawConfetti() {
+  if (confettiTimer > 0) {
+    confetti.forEach(c => {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+      ctx.fillStyle = c.color;
+      ctx.fill();
+    });
+  }
 }
 
 function update(dt) {
@@ -114,14 +185,19 @@ function update(dt) {
     bubbleOffset += dt * 0.05;
     if (settleTimer >= targetSettle) phase = 'pour2';
   }
+  if (popupTimer > 0) {
+    popupTimer -= dt;
+    if (popupTimer <= 0) popupDiv.style.display = 'none';
+  }
+  updateConfetti(dt);
 }
 
 function drawGlassShape() {
   ctx.beginPath();
   ctx.moveTo(-50, -200);
-  ctx.quadraticCurveTo(-40, 0, -20, 200); // left curve
+  ctx.quadraticCurveTo(-40, 0, -20, 200);
   ctx.lineTo(20, 200);
-  ctx.quadraticCurveTo(40, 0, 50, -200); // right curve
+  ctx.quadraticCurveTo(40, 0, 50, -200);
   ctx.closePath();
   ctx.strokeStyle = 'white';
   ctx.lineWidth = 3;
@@ -134,7 +210,7 @@ function drawBeer() {
   const beerHeight = 400 * fill;
   const foamHeight = 15;
   let slosh = Math.sin(Date.now()/200) * 5 * (tilt/90);
-  
+
   ctx.beginPath();
   ctx.moveTo(-48, 200);
   ctx.lineTo(-40, 200 - beerHeight);
@@ -143,14 +219,12 @@ function drawBeer() {
   ctx.closePath();
   ctx.fill();
 
-  // Foam
   ctx.fillStyle = '#f5f0e1';
   ctx.beginPath();
   ctx.moveTo(-40, 200 - beerHeight);
   ctx.quadraticCurveTo(0, 200 - beerHeight - foamHeight, 40, 200 - beerHeight + slosh);
   ctx.fill();
 
-  // Cascade bubbles during settle
   if (phase === 'settle') {
     ctx.fillStyle = 'rgba(255,255,255,0.2)';
     for (let i=0; i<20; i++) {
@@ -167,7 +241,7 @@ function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.save();
   ctx.translate(canvas.width/2, canvas.height/2);
-  ctx.rotate((tilt - 45) * Math.PI / 180 * 0.5); // tilt effect
+  ctx.rotate((tilt - 45) * Math.PI / 180 * 0.5);
 
   drawGlassShape();
   drawBeer();
@@ -178,8 +252,11 @@ function draw() {
   ctx.font = '20px sans-serif';
   ctx.fillText(`Tilt: ${tilt.toFixed(0)}°`, 10, 30);
   ctx.fillText(`Fill: ${(fill*100).toFixed(0)}%`, 10, 60);
-  ctx.fillText(`Score: ${score}`, 10, 90);
-  ctx.fillText(`Phase: ${phase}`, 10, 120);
+  ctx.fillText(`This Pint: ${score}`, 10, 90);
+  ctx.fillText(`Total Score: ${totalScore}`, 10, 120);
+  ctx.fillText(`Phase: ${phase}`, 10, 150);
+
+  drawConfetti();
 }
 
 function loop(timestamp) {
