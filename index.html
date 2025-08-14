@@ -1,0 +1,155 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Guinness Pour - Touch Edition</title>
+<style>
+  body {
+    margin: 0;
+    background: #222;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+    color: white;
+  }
+  canvas {
+    background: #333;
+    border: 2px solid #666;
+    touch-action: none;
+  }
+  #controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 10px;
+  }
+  button {
+    font-size: 1.2em;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    background: #444;
+    color: white;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+<div id="controls">
+  <button id="nextPint">Next Pint</button>
+  <button id="pauseBtn">Pause</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let phase = 'ready'; // 'pour1', 'settle', 'pour2', 'done'
+let tilt = 45; // degrees
+let fill = 0; // 0 to 1
+let score = 0;
+let paused = false;
+let pouring = false;
+let settleTimer = 0;
+let targetSettle = 2000; // ms
+let lastTime = 0;
+
+// Touch controls
+let lastY = null;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (phase === 'pour1' || phase === 'pour2') pouring = true;
+  lastY = e.touches[0].clientY;
+}, {passive: false});
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  pouring = false;
+  if (phase === 'pour1') { phase = 'settle'; settleTimer = 0; }
+  else if (phase === 'pour2') { phase = 'done'; checkScore(); }
+}, {passive: false});
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const y = e.touches[0].clientY;
+  if (lastY != null) {
+    tilt += (lastY - y) * 0.2; // adjust tilt
+    if (tilt < 0) tilt = 0;
+    if (tilt > 90) tilt = 90;
+  }
+  lastY = y;
+}, {passive: false});
+
+document.getElementById('nextPint').addEventListener('click', () => {
+  phase = 'pour1';
+  fill = 0;
+  tilt = 45;
+});
+
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  paused = !paused;
+});
+
+function checkScore() {
+  if (fill >= 0.98 && fill <= 1.0) score += 100;
+  else if (fill >= 0.95) score += 75;
+  else if (fill >= 0.90) score += 50;
+}
+
+function update(dt) {
+  if (paused) return;
+  if (phase === 'pour1' && pouring) {
+    fill += (1 - tilt/90) * dt * 0.0003;
+    if (fill > 0.75) fill = 0.75;
+  }
+  if (phase === 'settle') {
+    settleTimer += dt;
+    if (settleTimer >= targetSettle) phase = 'pour2';
+  }
+  if (phase === 'pour2' && pouring) {
+    fill += (1 - tilt/90) * dt * 0.0003;
+    if (fill > 1.05) fill = 1.05; // overflow
+  }
+}
+
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // Glass
+  ctx.strokeStyle = 'white';
+  ctx.strokeRect(150, 100, 100, 400);
+
+  // Beer fill
+  ctx.fillStyle = '#402a1a';
+  ctx.fillRect(150, 500 - 400*fill, 100, 400*fill);
+
+  // Head
+  ctx.fillStyle = '#f5f0e1';
+  ctx.fillRect(150, 500 - 400*fill - 10, 100, 10);
+
+  // Text
+  ctx.fillStyle = 'white';
+  ctx.font = '20px sans-serif';
+  ctx.fillText(`Tilt: ${tilt.toFixed(0)}°`, 10, 30);
+  ctx.fillText(`Fill: ${(fill*100).toFixed(0)}%`, 10, 60);
+  ctx.fillText(`Score: ${score}`, 10, 90);
+  ctx.fillText(`Phase: ${phase}`, 10, 120);
+}
+
+function loop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const dt = timestamp - lastTime;
+  lastTime = timestamp;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
