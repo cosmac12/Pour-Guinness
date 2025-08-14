@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -48,7 +47,7 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-let phase = 'ready'; // 'pour1', 'settle', 'pour2', 'done'
+let phase = 'ready'; // ready, pour1, settle, pour2, done
 let tilt = 45; // degrees
 let fill = 0; // 0 to 1
 let score = 0;
@@ -62,6 +61,7 @@ let lastTime = 0;
 let lastY = null;
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
+  if (phase === 'ready') phase = 'pour1';
   if (phase === 'pour1' || phase === 'pour2') pouring = true;
   lastY = e.touches[0].clientY;
 }, {passive: false});
@@ -102,17 +102,15 @@ function checkScore() {
 
 function update(dt) {
   if (paused) return;
-  if (phase === 'pour1' && pouring) {
-    fill += (1 - tilt/90) * dt * 0.0003;
-    if (fill > 0.75) fill = 0.75;
+  if ((phase === 'pour1' || phase === 'pour2') && pouring) {
+    let speed = (1 - tilt/90) * dt * 0.0003;
+    fill += speed;
+    if (phase === 'pour1' && fill > 0.75) fill = 0.75;
+    if (phase === 'pour2' && fill > 1.05) fill = 1.05; // overflow
   }
   if (phase === 'settle') {
     settleTimer += dt;
     if (settleTimer >= targetSettle) phase = 'pour2';
-  }
-  if (phase === 'pour2' && pouring) {
-    fill += (1 - tilt/90) * dt * 0.0003;
-    if (fill > 1.05) fill = 1.05; // overflow
   }
 }
 
